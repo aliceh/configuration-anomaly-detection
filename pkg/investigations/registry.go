@@ -6,6 +6,7 @@ import (
 	"github.com/openshift/configuration-anomaly-detection/pkg/investigations/clustermonitoringerrorbudgetburn"
 	"github.com/openshift/configuration-anomaly-detection/pkg/investigations/cpd"
 	"github.com/openshift/configuration-anomaly-detection/pkg/investigations/investigation"
+	"github.com/openshift/configuration-anomaly-detection/pkg/investigations/pruningcronjoberror"
 )
 
 // availableInvestigations holds all Investigation implementations.
@@ -14,6 +15,7 @@ var availableInvestigations = []investigation.Investigation{
 	&chgm.Investiation{},
 	&clustermonitoringerrorbudgetburn.Investigation{},
 	&cpd.Investigation{},
+	&pruningcronjoberror.Investigation{},
 }
 
 // GetInvestigation returns the first Investigation that applies to the given alert title.

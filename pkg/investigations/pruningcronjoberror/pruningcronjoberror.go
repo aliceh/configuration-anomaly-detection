@@ -30,11 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type pcj struct{}
+type PCJ struct{}
 
-func (c *pcj) Run(r *investigation.Resources) (investigation.InvestigationResult, error) {
+func (c *PCJ) Run(r *investigation.Resources) (investigation.InvestigationResult, error) {
 	result := investigation.InvestigationResult{}
-	notes := notewriter.New("CPJ", logging.RawLogger)
+	notes := notewriter.New("PCJ", logging.RawLogger)
 
 	//Step: node-exporter consuming high cpu in SDN clusters
 	//Step: oc get Network.config.openshift.io cluster -o json | jq '.spec.networkType'
@@ -81,7 +81,8 @@ func (c *pcj) Run(r *investigation.Resources) (investigation.InvestigationResult
 	//oc describe pod ${POD} -n openshift-sre-pruning
 	prunerPods := &corev1.PodList{}
 	err = k8scli.List(context.TODO(), prunerPods, client.InNamespace("openshift-sre-pruning"))
-	fmt.Println("List: %#v", err)
+
+	fmt.Println("Hello World")
 
 	// Iterate through the pods and print their .status.containerStatuses
 	for _, pod := range prunerPods.Items {
