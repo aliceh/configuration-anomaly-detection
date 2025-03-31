@@ -19,6 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"regexp"
 	"strings"
 
 	investigation "github.com/openshift/configuration-anomaly-detection/pkg/investigations/investigation"
@@ -35,6 +37,17 @@ type PCJ struct{}
 func (c *PCJ) Run(r *investigation.Resources) (investigation.InvestigationResult, error) {
 	result := investigation.InvestigationResult{}
 	notes := notewriter.New("PCJ", logging.RawLogger)
+	bpError, ok := r.AdditionalResources["error"].(error)
+	if !ok {
+		return result, fmt.Errorf("Missing required CCAM field 'error'")
+	}
+	logging.Info("Investigating possible missing cloud credentials...")
+	if customerRemovedPermissions := customerRemovedPermissions(bpError.Error()); !customerRemovedPermissions {
+		// We aren't able to jumpRole because of an error that is different than
+		// a removed support role/policy or removed installer role/policy
+		// This would normally be a backplane failure.
+		return result, fmt.Errorf("credentials are there, error is different: %w", bpError)
+	}
 
 	//Step: node-exporter consuming high cpu in SDN clusters
 	//Step: oc get Network.config.openshift.io cluster -o json | jq '.spec.networkType'
@@ -118,4 +131,59 @@ func (c *PCJ) Run(r *investigation.Resources) (investigation.InvestigationResult
 	notes.AppendSuccess("This is a test")
 
 	return result, nil
+}
+
+func (c *PCJ) Name() string {
+	return "Cluster Credentials Are Missing (PCJ)"
+}
+func (c *PCJ) Description() string {
+	return "Steps through PruningCronjobError SOP"
+}
+
+func (c *PCJ) ShouldInvestigateAlert(alert string) bool {
+	return false
+}
+
+func (c *PCJ) IsExperimental() bool {
+	return false
+}
+
+var userCausedErrors = []string{
+	// OCM can't access the installer role to determine the trust relationship on the support role,
+	// therefore we don't know if it's the isolated access flow or the old flow, e.g.:
+	// status is 404, identifier is '404', code is 'CLUSTERS-MGMT-404' and operation identifier is '<id>': Failed to find trusted relationship to support role 'RH-Technical-Support-Access'
+	// See https://issues.redhat.com/browse/OSD-24270
+	".*Failed to find trusted relationship to support role 'RH-Technical-Support-Access'.*",
+
+	// OCM role can't access the installer role, this happens when customer deletes/modifies the trust policy of the installer role, e.g.:
+	// status is 400, identifier is '400', code is 'CLUSTERS-MGMT-400' and operation identifier is '<id>': Please make sure IAM role 'arn:aws:iam::<ocm_role_aws_id>:role/ManagedOpenShift-Installer-Role' exists, and add 'arn:aws:iam::<id>:role/RH-Managed-OpenShift-Installer' to the trust policy on IAM role 'arn:aws:iam::<id>:role/ManagedOpenShift-Installer-Role': Failed to assume role: User: arn:aws:sts::<id>:assumed-role/RH-Managed-OpenShift-Installer/OCM is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::<customer_aws_id>:role/ManagedOpenShift-Installer-Role
+	".*RH-Managed-OpenShift-Installer/OCM is not authorized to perform: sts:AssumeRole on resource.*",
+
+	// Customer deleted the support role, e.g.:
+	// status is 404, identifier is '404', code is 'CLUSTERS-MGMT-404' and operation identifier is '<id>': Support role, used with cluster '<cluster_id>', does not exist in the customer's AWS account
+	".*Support role, used with cluster '[a-z0-9]{32}', does not exist in the customer's AWS account.*",
+
+	// This error is the response from backplane calls when:
+	// trust policy of ManagedOpenShift-Support-Role is changed
+	".*could not assume support role in customer's account: AccessDenied:.*",
+
+	// Customer removed the `GetRole` permission from the Installer role.
+	// Failed to get role: User: arn:aws:sts::<id>:assumed-role/ManagedOpenShift-Installer-Role/OCM is not authorized to perform: iam:GetRole on resource: role ManagedOpenShift-Support-Role because no identity-based policy allows the iam:GetRole action
+	".*is not authorized to perform: iam:GetRole on resource: role.*",
+}
+
+func customerRemovedPermissions(backplaneError string) bool {
+	for _, str := range userCausedErrors {
+		re, err := regexp.Compile(str)
+		if err != nil {
+			// This should never happen on production as we would run into it during unit tests
+			log.Fatal("failed to regexp.Compile string in `userCausedErrors`")
+		}
+
+		if re.MatchString(backplaneError) {
+			return true
+		}
+	}
+
+	return false
 }
