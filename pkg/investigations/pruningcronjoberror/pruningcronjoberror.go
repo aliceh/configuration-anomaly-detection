@@ -90,18 +90,12 @@ func (c *Investigation) Run(r *investigation.Resources) (investigation.Investiga
 	for _, pod := range prunerPods.Items {
 		fmt.Printf("Pod Name: %s\n", pod.Name)
 		for _, containerStatus := range pod.Status.ContainerStatuses {
-			fmt.Printf("  Container Name: %s, Ready: %t, ContainerStatus State: %d\n",
+			fmt.Printf("Container Name: %v, Ready: %v, ContainerStatus State: %v",
 				containerStatus.Name, containerStatus.Ready, containerStatus.State)
 
 			// Convert ContainerStatus to text
-			containerText := fmt.Sprintf(
-				"Container Name: %s, Ready: %t, Restart Count: %d, Image: %s", "State: %v",
-				containerStatus.Name,
-				containerStatus.Ready,
-				containerStatus.RestartCount,
-				containerStatus.Image,
-				containerStatus.State,
-			)
+			containerText := fmt.Sprintf("Container Name: %v, Ready: %v, Restart Count: %v, Image: %v, State: %v", containerStatus.Name,
+				containerStatus.Ready, containerStatus.RestartCount, containerStatus.Image, containerStatus.State)
 
 			if strings.Contains(containerText, "seccomp filter: errno 524") {
 				fmt.Println("Text contains the seccomp filter: errno 524")
