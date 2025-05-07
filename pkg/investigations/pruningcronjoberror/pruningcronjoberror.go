@@ -81,6 +81,7 @@ func (c *Investigation) Run(r *investigation.Resources) (investigation.Investiga
 	//https://github.com/openshift/ops-sop/blob/master/v4/alerts/PruningCronjobErrorSRE.md#seccomp-error-524
 	//oc describe pod ${POD} -n openshift-sre-pruning
 	prunerPods := &corev1.PodList{}
+
 	err = k8scli.List(context.TODO(), prunerPods, client.InNamespace("openshift-sre-pruning"))
 
 	fmt.Println("Hello World")
@@ -89,16 +90,17 @@ func (c *Investigation) Run(r *investigation.Resources) (investigation.Investiga
 	for _, pod := range prunerPods.Items {
 		fmt.Printf("Pod Name: %s\n", pod.Name)
 		for _, containerStatus := range pod.Status.ContainerStatuses {
-			fmt.Printf("  Container Name: %s, Ready: %t, Restart Count: %d\n",
-				containerStatus.Name, containerStatus.Ready, containerStatus.RestartCount)
+			fmt.Printf("  Container Name: %s, Ready: %t, ContainerStatus State: %d\n",
+				containerStatus.Name, containerStatus.Ready, containerStatus.State)
 
 			// Convert ContainerStatus to text
 			containerText := fmt.Sprintf(
-				"Container Name: %s, Ready: %t, Restart Count: %d, Image: %s",
+				"Container Name: %s, Ready: %t, Restart Count: %d, Image: %s", "State: %v",
 				containerStatus.Name,
 				containerStatus.Ready,
 				containerStatus.RestartCount,
 				containerStatus.Image,
+				containerStatus.State,
 			)
 
 			if strings.Contains(containerText, "seccomp filter: errno 524") {
